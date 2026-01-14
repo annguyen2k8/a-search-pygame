@@ -1,2 +1,2 @@
 # a-search-pygame
-Powered by pygame-c
+Powered by pygame-ce
