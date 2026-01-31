@@ -15,6 +15,8 @@ RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 
+Point = Tuple[int, int]
+
 
 class CellType(Enum):
     EMPTY = 0
@@ -24,32 +26,51 @@ class CellType(Enum):
 class Cell:
     x: int
     y: int
-    cell_type: CellType
+
+    __cell_type: CellType
 
     def __init__(self, x: int, y: int, cell_type: CellType = CellType.EMPTY):
-        super().__init__()
-
         self.x = x
         self.y = y
-        self.cell_type = cell_type
+
+        self.__cell_type = cell_type
+
+    @property
+    def pos(self) -> Point:
+        return (self.x, self.y)
+
+    @property
+    def cell_type(self) -> CellType:
+        return self.__cell_type
+
+    def set_type(self, value: CellType):
+        self.__cell_type = value
 
 
 class Board:
     __width: int
     __height: int
 
-    __cells: List[Cell] = []
+    __cells: List[Cell]
+
+    __start_pos: Optional[Point]
+    __goal_pos: Optional[Point]
 
     def __init__(self, width: int, height: int):
         self.__width = width
         self.__height = height
+
+        self.__cells = []
+
+        self.__start_pos = None
+        self.__goal_pos = None
 
         for x in range(width):
             for y in range(height):
                 self.__cells.append(Cell(x, y))
 
     @property
-    def size(self) -> Tuple[int, int]:
+    def size(self) -> Point:
         return (self.width, self.height)
 
     @property
@@ -64,21 +85,50 @@ class Board:
     def cells(self) -> List[Cell]:
         return self.__cells
 
-    def foreach_cell(self, func: Callable[[Cell], None]):
+    @property
+    def start_pos(self) -> Optional[Point]:
+        return self.__start_pos
+
+    @start_pos.setter
+    def start_point(self, value: Optional[Point]):
+        if value and self.goal_pos == value:
+            return
+
+        self.__start_pos = value
+
+    @property
+    def goal_pos(self) -> Optional[Point]:
+        return self.__goal_pos
+
+    @goal_pos.setter
+    def goal_pos(self, value: Optional[Point]):
+        if value and self.start_point == value:
+            return
+
+        self.__goal_pos = value
+
+    def foreach_cell(self, func: Callable[[Cell, CellType], None]):
         for cell in self.cells:
-            func(cell)
+            func(cell, cell.cell_type)
 
-    def is_inside(self, x: int, y: int) -> bool:
-        return 0 <= x < self.width and 0 <= y < self.height
+    def get_cell_at(self, pos: Point) -> Optional[Cell]:
+        x, y = pos
 
-    def get_cell(self, x: int, y: int) -> Optional[Cell]:
         for cell in self.cells:
             if cell.x == x and cell.y == y:
                 return cell
         return None
 
+    def set_cell_type_at(self, pos: Point, value: CellType):
+        if pos in (self.start_point, self.goal_pos):
+            return
 
-def render_text(text, color=WHITE):
+        cell = self.get_cell_at(pos)
+        if cell is not None:
+            cell.set_type(value)
+
+
+def render_text(text: str, color=WHITE):
     return FONT.render(text, True, color)
 
 
@@ -101,7 +151,7 @@ class Game:
         self.clock = Clock()
         self.running = True
 
-        self.board = Board(16, 10)
+        self.board = Board(25, 16)
 
         pygame.display.set_icon(pygame.image.load("./assets/icon.png"))
         pygame.display.set_caption("A* Search Pygame")
@@ -125,13 +175,37 @@ class Game:
 
             self.update()
 
+            self.screen.fill(BLACK)
+
             self.draw()
 
             pygame.display.update()
 
     def update(self):
         pygame.display.set_caption(f"Tile pos: {self.get_mouse_tile()}")
-        pass
+
+        mouse_clicked = pygame.mouse.get_pressed()
+        mouse_tile = self.get_mouse_tile()
+
+        if mouse_clicked[0] and mouse_tile:
+            if not self.board.start_point:
+                self.board.start_point = mouse_tile
+
+            elif not self.board.goal_pos:
+                self.board.goal_pos = mouse_tile
+
+            else:
+                self.board.set_cell_type_at(mouse_tile, CellType.WALL)
+
+        if mouse_clicked[2] and mouse_tile:
+            if mouse_tile == self.board.start_point:
+                self.board.start_point = None
+
+            elif mouse_tile == self.board.goal_pos:
+                self.board.goal_pos = None
+
+            else:
+                self.board.set_cell_type_at(mouse_tile, CellType.EMPTY)
 
     def update_render(self):
         viewport = self.screen_rect
@@ -157,7 +231,7 @@ class Game:
 
         self.board_surface = Surface((self.board_rect.width, self.board_rect.height))
 
-    def get_mouse_tile(self) -> Optional[Tuple[int, int]]:
+    def get_mouse_tile(self) -> Optional[Point]:
         mouse_pos = Vector2(pygame.mouse.get_pos())
 
         if not self.board_rect.collidepoint(mouse_pos):
@@ -170,7 +244,9 @@ class Game:
             int(local_pos.y / self.tile_size),
         )
 
-    def rect_tile_at(self, x: int, y: int) -> Rect:
+    def rect_tile_at(self, pos: Point) -> Rect:
+        x, y = pos
+
         return Rect(
             self.tile_size * x,
             self.tile_size * y,
@@ -179,14 +255,30 @@ class Game:
         )
 
     def draw(self):
-        self.screen.fill(BLACK)
+        self.board_surface.fill(BLACK)
 
-        def draw_cell(cell: Cell):
+        def draw_cell(cell: Cell, cell_type: CellType):
+            width = 1
+
+            if cell_type == CellType.WALL:
+                width = 0
+
             pygame.draw.rect(
                 self.board_surface,
                 BLUE,
-                self.rect_tile_at(cell.x, cell.y),
-                1,
+                self.rect_tile_at(cell.pos),
+                width,
+            )
+
+        if self.board.start_pos:
+            pygame.draw.rect(
+                self.board_surface, RED, self.rect_tile_at(self.board.start_pos), 5
+            )
+
+        if self.board.goal_pos:
+            x, y = self.board.goal_pos
+            pygame.draw.rect(
+                self.board_surface, GREEN, self.rect_tile_at(self.board.goal_pos), 5
             )
 
         self.board.foreach_cell(draw_cell)
