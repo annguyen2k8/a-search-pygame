@@ -1,13 +1,17 @@
+# region    IMPORT
+
 from enum import Enum
 from typing import Callable, List, Optional, Tuple
 
 import pygame
 from pygame import Clock, Rect, Surface, Vector2
-from pygame.locals import QUIT, VIDEORESIZE
+from pygame.locals import QUIT, VIDEORESIZE, K_SPACE
 
 pygame.init()
 
-FONT = pygame.Font("./assets/font.otf")
+# region    VARIABLES
+
+FONT = pygame.Font("./assets/font.otf", 16)
 
 BLACK = (20, 20, 20)
 WHITE = (255, 255, 255)
@@ -16,6 +20,8 @@ GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 
 Point = Tuple[int, int]
+
+# region    CORE
 
 
 class CellType(Enum):
@@ -128,22 +134,33 @@ class Board:
             cell.set_type(value)
 
 
+# region GAME
+
+
 def render_text(text: str, color=WHITE):
     return FONT.render(text, True, color)
 
 
-class Game:
-    board_padding: int = 8
+class GameState(Enum):
+    EDITING = 0
+    SEARCHING = 1
+    FINISHED = 2
 
+
+class Game:
     screen: Surface
     clock: Clock
     running: bool
+
+    board_padding: int = 8
 
     board_surface: Surface
     board_rect: Rect
     board: Board
 
     cell_size: float
+
+    state: GameState
 
     def __init__(self):
         self.screen = pygame.display.set_mode((1280, 720), pygame.RESIZABLE)
@@ -157,6 +174,8 @@ class Game:
         pygame.display.set_caption("A* Search Pygame")
 
         self.update_render()
+
+        self.state = GameState.EDITING
 
     @property
     def screen_rect(self) -> Rect:
@@ -182,10 +201,23 @@ class Game:
             pygame.display.update()
 
     def update(self):
-        pygame.display.set_caption(f"Tile pos: {self.get_mouse_tile()}")
+        if self.state == GameState.EDITING:
+            self.update_editing()
+        if self.state == GameState.SEARCHING:
+            self.update_searching()
+        if self.state == GameState.FINISHED:
+            ...
 
+    def update_searching(self): ...
+
+    def update_editing(self):
+        keys = pygame.key.get_just_pressed()
         mouse_clicked = pygame.mouse.get_pressed()
         mouse_tile = self.get_mouse_tile()
+
+        if keys[K_SPACE]:
+            if self.board.start_point and self.board.goal_pos:
+                self.state = GameState.SEARCHING
 
         if mouse_clicked[0] and mouse_tile:
             if not self.board.start_point:
@@ -284,6 +316,14 @@ class Game:
         self.board.foreach_cell(draw_cell)
 
         self.screen.blit(self.board_surface, self.board_rect)
+
+        text = f"""
+[DEBUG MODE]
+MOUSE TILE  : {self.get_mouse_tile()}
+GAMESTATE   : {self.state.name.upper()}
+"""
+        text_surface = render_text(text, WHITE)
+        self.screen.blit(text_surface, (5, 0))
 
 
 if __name__ == "__main__":
