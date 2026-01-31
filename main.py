@@ -1,11 +1,9 @@
-import pygame
-from pygame import Surface, Clock, Rect, Event, Vector2
-from pygame.locals import QUIT, VIDEORESIZE
-
 from enum import Enum
+from typing import Callable, List, Optional, Tuple
 
-
-from typing import Callable, List, Optional, Tuple, Union, Any
+import pygame
+from pygame import Clock, Rect, Surface, Vector2
+from pygame.locals import QUIT, VIDEORESIZE
 
 pygame.init()
 
